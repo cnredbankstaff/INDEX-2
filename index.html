@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meme Dash 3D</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Press+Start+2P&display=swap');
+    
+    html, body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+    }
+    
+    .game-font {
+      font-family: 'Bangers', cursive;
+    }
+    
+    .pixel-font {
+      font-family: 'Press Start 2P', cursive;
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.5); }
+      50% { box-shadow: 0 0 40px rgba(255, 215, 0, 0.8); }
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    
+    @keyframes spin-in {
+      from { transform: rotate(0deg) scale(0); opacity: 0; }
+      to { transform: rotate(360deg) scale(1); opacity: 1; }
+    }
+    
+    .floating {
+      animation: float 2s ease-in-out infinite;
+    }
+    
+    .pulse-glow {
+      animation: pulse-glow 1.5s ease-in-out infinite;
+    }
+    
+    .shake {
+      animation: shake 0.3s ease-in-out;
+    }
+    
+    .spin-in {
+      animation: spin-in 0.5s ease-out forwards;
+    }
+    
+    #canvas-3d {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    
+    .ui-overlay {
+      position: absolute;
+      z-index: 10;
+      pointer-events: none;
+    }
+    
+    .ui-overlay button {
+      pointer-events: auto;
+    }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+ </head>
+ <body class="h-full w-full">
+  <div id="app" class="h-full w-full"><!-- 3D Canvas -->
+   <canvas id="canvas-3d"></canvas><!-- Menu Screen UI -->
+   <div id="menu-screen" class="absolute inset-0 flex flex-col items-center justify-center p-4 z-20 bg-black/50 backdrop-blur-sm">
+    <h1 id="game-title" class="game-font text-6xl md:text-8xl text-yellow-400 mb-4 text-center drop-shadow-lg floating" style="text-shadow: 4px 4px 0 #e65100, 8px 8px 0 rgba(0,0,0,0.3);">MEME DASH 3D</h1>
+    <p class="text-cyan-300 text-lg mb-8 pixel-font text-center">Tap or Space to Jump!</p>
+    <div class="mb-8">
+     <p class="text-white text-center mb-4 game-font text-2xl">Choose Your Meme:</p>
+     <div id="character-select" class="flex gap-4 flex-wrap justify-center">
+      <!-- Characters added by JS -->
+     </div>
+    </div>
+    <div id="high-scores" class="bg-black/40 rounded-xl p-4 mb-6 w-full max-w-md backdrop-blur-sm border border-purple-500/30">
+     <h2 class="game-font text-2xl text-yellow-300 text-center mb-3">🏆 High Scores</h2>
+     <div id="scores-list" class="space-y-2 max-h-32 overflow-y-auto">
+      <p class="text-gray-400 text-center text-sm">No scores yet!</p>
+     </div>
+    </div><button id="play-btn" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-4 px-12 rounded-full text-2xl game-font transition-all transform hover:scale-110 pulse-glow">🎮 PLAY</button>
+   </div><!-- Game UI Overlay -->
+   <div id="game-ui" class="absolute inset-0 pointer-events-none z-20 hidden">
+    <div class="absolute top-4 left-4 bg-black/50 px-4 py-2 rounded-lg backdrop-blur-sm border border-cyan-500/30"><span class="text-white game-font text-2xl">Score: <span id="score">0</span></span>
+    </div>
+   </div><!-- Game Over Screen UI -->
+   <div id="gameover-screen" class="absolute inset-0 flex-col items-center justify-center p-4 z-30 bg-black/80 backdrop-blur-sm hidden">
+    <div class="spin-in">
+     <h2 class="game-font text-5xl md:text-7xl text-red-500 mb-4 text-center" style="text-shadow: 3px 3px 0 #000;">GAME OVER</h2>
+    </div>
+    <p class="text-white text-3xl mb-2 game-font">Your Score:</p>
+    <p id="final-score" class="text-yellow-400 text-6xl mb-6 game-font">0</p>
+    <div id="name-input-container" class="mb-6 w-full max-w-xs"><input type="text" id="player-name" placeholder="Enter your name" maxlength="15" class="w-full px-4 py-3 rounded-lg bg-purple-900/80 border-2 border-purple-500 text-white text-center text-xl focus:outline-none focus:border-yellow-400"> <button id="save-score-btn" class="w-full mt-3 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-black font-bold py-3 px-6 rounded-lg game-font text-xl transition-all">💾 Save Score</button>
+    </div>
+    <div class="flex gap-4 flex-wrap justify-center"><button id="retry-btn" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-3 px-8 rounded-full text-xl game-font transition-all transform hover:scale-105">🔄 Retry</button> <button id="menu-btn" class="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-bold py-3 px-8 rounded-full text-xl game-font transition-all transform hover:scale-105">🏠 Menu</button>
+    </div>
+   </div>
+  </div>
+  <script>
+    // THREE.js 3D Game
+    let scene, camera, renderer;
+    let player, ground, obstacles = [];
+    let gameState = {
+      isPlaying: false,
+      score: 0,
+      gameSpeed: 0.3,
+      playerY: 0,
+      velocity: 0,
+      isJumping: false
+    };
+    
+    // Meme characters
+    const characters = [
+      { id: 'doge', emoji: '🐕', name: 'Doge' },
+      { id: 'crying', emoji: '😭', name: 'Crying' },
+      { id: 'skull', emoji: '💀', name: 'Skull' },
+      { id: 'fire', emoji: '🔥', name: 'Fire' },
+      { id: 'clown', emoji: '🤡', name: 'Clown' },
+      { id: 'alien', emoji: '👽', name: 'Alien' },
+      { id: 'robot', emoji: '🤖', name: 'Robot' },
+      { id: 'ghost', emoji: '👻', name: 'Ghost' }
+    ];
+    
+    let selectedCharacter = characters[0];
+    let highScores = [];
+    let currentRecordCount = 0;
+    
+    // Config for SDK
+    const defaultConfig = {
+      game_title: 'MEME DASH 3D',
+      background_color: '#1e1b4b',
+      text_color: '#facc15',
+      accent_color: '#22c55e',
+      surface_color: '#6366f1',
+      secondary_color: '#06b6d4'
+    };
+    
+    // Initialize Three.js
+    function init3D() {
+      const canvas = document.getElementById('canvas-3d');
+      
+      // Scene setup
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a0f3f);
+      scene.fog = new THREE.Fog(0x1a0f3f, 100, 200);
+      
+      // Camera
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 2, 8);
+      camera.lookAt(0, 2, 0);
+      
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+      
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(10, 10, 10);
+      directionalLight.castShadow = true;
+      scene.add(directionalLight);
+      
+      const pointLight = new THREE.PointLight(0x00ffff, 0.5);
+      pointLight.position.set(-5, 5, 5);
+      scene.add(pointLight);
+      
+      // Ground
+      const groundGeo = new THREE.PlaneGeometry(50, 5);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x16213e });
+      ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+      
+      // Add grid to ground for visual reference
+      const gridHelper = new THREE.GridHelper(50, 50, 0x444444, 0x222222);
+      gridHelper.position.y = -1.9;
+      scene.add(gridHelper);
+      
+      // Player (Box with emoji texture)
+      createPlayer();
+      
+      // Stars in background
+      createStars();
+      
+      // Handle window resize
+      window.addEventListener('resize', onWindowResize);
+      
+      // Start animation loop
+      animate();
+    }
+    
+    function createPlayer() {
+      if (player) scene.remove(player);
+      
+      const playerGeo = new THREE.BoxGeometry(1, 1, 1);
+      const playerMat = new THREE.MeshStandardMaterial({ 
+        color: 0xff00ff,
+        emissive: 0xff00ff,
+        emissiveIntensity: 0.3,
+        metalness: 0.5,
+        roughness: 0.5
+      });
+      
+      player = new THREE.Mesh(playerGeo, playerMat);
+      player.position.set(-5, 0, 0);
+      player.castShadow = true;
+      player.receiveShadow = true;
+      
+      // Add emoji canvas texture on top
+      updatePlayerEmoji();
+      
+      scene.add(player);
+    }
+    
+    function updatePlayerEmoji() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      
+      ctx.fillStyle = '#ff00ff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.font = 'bold 200px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(selectedCharacter.emoji, 128, 128);
+      
+      const texture = new THREE.CanvasTexture(canvas);
+      player.material = new THREE.MeshStandardMaterial({ map: texture, emissiveIntensity: 0.2 });
+    }
+    
+    function createStars() {
+      const starGeo = new THREE.BufferGeometry();
+      const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.2 });
+      
+      const starVertices = [];
+      for (let i = 0; i < 1000; i++) {
+        const x = (Math.random() - 0.5) * 200;
+        const y = (Math.random() - 0.5) * 200;
+        const z = (Math.random() - 0.5) * 200 - 50;
+        starVertices.push(x, y, z);
+      }
+      
+      starGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(starVertices), 3));
+      const stars = new THREE.Points(starGeo, starMat);
+      scene.add(stars);
+    }
+    
+    function spawnObstacle() {
+      if (!gameState.isPlaying) return;
+      
+      const spikeGeo = new THREE.ConeGeometry(0.5, 1.5, 8);
+      const spikeMat = new THREE.MeshStandardMaterial({ 
+        color: 0xff0000,
+        emissive: 0xff0000,
+        emissiveIntensity: 0.4,
+        metalness: 0.7,
+        roughness: 0.3
+      });
+      
+      const spike = new THREE.Mesh(spikeGeo, spikeMat);
+      spike.position.set(15, 0, 0);
+      spike.castShadow = true;
+      spike.receiveShadow = true;
+      spike.rotation.z = Math.PI / 2;
+      
+      obstacles.push({
+        mesh: spike,
+        x: 15,
+        hit: false
+      });
+      
+      scene.add(spike);
+    }
+    
+    function jump() {
+      if (!gameState.isJumping && gameState.isPlaying) {
+        gameState.isJumping = true;
+        gameState.velocity = 0.3;
+      }
+    }
+    
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      if (gameState.isPlaying) {
+        // Physics
+        gameState.velocity -= 0.01;
+        gameState.playerY += gameState.velocity;
+        
+        if (gameState.playerY <= 0) {
+          gameState.playerY = 0;
+          gameState.velocity = 0;
+          gameState.isJumping = false;
+        }
+        
+        player.position.y = gameState.playerY;
+        
+        // Player rotation during jump
+        if (gameState.isJumping) {
+          player.rotation.z = Math.PI;
+        } else {
+          player.rotation.z = 0;
+        }
+        
+        // Update obstacles
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+          const obs = obstacles[i];
+          obs.x -= gameState.gameSpeed;
+          obs.mesh.position.x = obs.x;
+          obs.mesh.rotation.y += 0.05;
+          
+          // Collision detection
+          const distance = Math.sqrt(
+            Math.pow(player.position.x - obs.mesh.position.x, 2) +
+            Math.pow(player.position.y - obs.mesh.position.y, 2)
+          );
+          
+          if (distance < 1.5 && !obs.hit) {
+            gameOver();
+            obs.hit = true;
+          }
+          
+          if (obs.x < -15) {
+            scene.remove(obs.mesh);
+            obstacles.splice(i, 1);
+            gameState.score += 10;
+            document.getElementById('score').textContent = gameState.score;
+            
+            if (gameState.score % 50 === 0) {
+              gameState.gameSpeed = Math.min(gameState.gameSpeed + 0.05, 0.6);
+            }
+          }
+        }
+      }
+      
+      renderer.render(scene, camera);
+    }
+    
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    
+    function startGame() {
+      gameState.isPlaying = true;
+      gameState.score = 0;
+      gameState.gameSpeed = 0.3;
+      gameState.playerY = 0;
+      gameState.velocity = 0;
+      gameState.isJumping = false;
+      
+      document.getElementById('score').textContent = '0';
+      
+      obstacles.forEach(obs => scene.remove(obs.mesh));
+      obstacles = [];
+      
+      player.position.set(-5, 0, 0);
+      updatePlayerEmoji();
+      
+      document.getElementById('menu-screen').classList.add('hidden');
+      document.getElementById('game-ui').classList.remove('hidden');
+      document.getElementById('gameover-screen').classList.add('hidden');
+      
+      // Spawn obstacles periodically
+      const spawnInterval = setInterval(() => {
+        if (gameState.isPlaying) spawnObstacle();
+        else clearInterval(spawnInterval);
+      }, 1500);
+    }
+    
+    function gameOver() {
+      gameState.isPlaying = false;
+      
+      document.getElementById('final-score').textContent = gameState.score;
+      document.getElementById('player-name').value = '';
+      document.getElementById('game-ui').classList.add('hidden');
+      document.getElementById('gameover-screen').classList.remove('hidden');
+    }
+    
+    function showMenu() {
+      gameState.isPlaying = false;
+      document.getElementById('menu-screen').classList.remove('hidden');
+      document.getElementById('game-ui').classList.add('hidden');
+      document.getElementById('gameover-screen').classList.add('hidden');
+    }
+    
+    // Character selection
+    function initCharacterSelect() {
+      const characterSelect = document.getElementById('character-select');
+      characterSelect.innerHTML = '';
+      characters.forEach((char) => {
+        const btn = document.createElement('button');
+        btn.className = `text-4xl p-3 rounded-xl transition-all transform hover:scale-110 ${
+          selectedCharacter.id === char.id 
+            ? 'bg-yellow-500/50 ring-4 ring-yellow-400 scale-110' 
+            : 'bg-white/10 hover:bg-white/20'
+        }`;
+        btn.innerHTML = char.emoji;
+        btn.title = char.name;
+        btn.onclick = () => {
+          selectedCharacter = char;
+          initCharacterSelect();
+          updatePlayerEmoji();
+        };
+        characterSelect.appendChild(btn);
+      });
+    }
+    
+    // High scores
+    function updateScoresDisplay() {
+      if (highScores.length === 0) {
+        document.getElementById('scores-list').innerHTML = '<p class="text-gray-400 text-center text-sm">No scores yet!</p>';
+        return;
+      }
+      
+      const sortedScores = [...highScores].sort((a, b) => b.high_score - a.high_score).slice(0, 5);
+      document.getElementById('scores-list').innerHTML = sortedScores.map((s, i) => {
+        const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+        return `<div class="flex justify-between items-center text-white px-2 py-1 bg-purple-900/30 rounded">
+          <span>${medals[i]} ${s.player_name}</span>
+          <span class="text-yellow-300 font-bold">${s.high_score}</span>
+        </div>`;
+      }).join('');
+    }
+    
+    // Save score
+    async function saveScore() {
+      const nameInput = document.getElementById('player-name');
+      const playerName = nameInput.value.trim() || 'Anonymous';
+      
+      if (currentRecordCount >= 999) {
+        alert('Maximum scores reached!');
+        return;
+      }
+      
+      const saveBtn = document.getElementById('save-score-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = '⏳ Saving...';
+      
+      const result = await window.dataSdk.create({
+        player_name: playerName,
+        high_score: gameState.score,
+        created_at: new Date().toISOString()
+      });
+      
+      saveBtn.disabled = false;
+      saveBtn.textContent = '💾 Save Score';
+      
+      if (result.isOk) {
+        saveBtn.textContent = '✅ Saved!';
+        setTimeout(() => {
+          saveBtn.textContent = '💾 Save Score';
+        }, 2000);
+      }
+    }
+    
+    // Event listeners
+    document.getElementById('play-btn').addEventListener('click', startGame);
+    document.getElementById('retry-btn').addEventListener('click', startGame);
+    document.getElementById('menu-btn').addEventListener('click', showMenu);
+    document.getElementById('save-score-btn').addEventListener('click', saveScore);
+    
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'ArrowUp') {
+        e.preventDefault();
+        if (gameState.isPlaying) jump();
+      }
+    });
+    
+    document.addEventListener('touchstart', () => {
+      if (gameState.isPlaying) jump();
+    });
+    
+    document.getElementById('canvas-3d').addEventListener('click', () => {
+      if (gameState.isPlaying) jump();
+    });
+    
+    // Data SDK
+    const dataHandler = {
+      onDataChanged(data) {
+        highScores = data;
+        currentRecordCount = data.length;
+        updateScoresDisplay();
+      }
+    };
+    
+    // Element SDK
+    async function onConfigChange(config) {
+      document.getElementById('game-title').textContent = config.game_title || defaultConfig.game_title;
+    }
+    
+    function mapToCapabilities(config) {
+      return {
+        recolorables: [
+          {
+            get: () => config.background_color || defaultConfig.background_color,
+            set: (value) => {
+              config.background_color = value;
+              window.elementSdk.setConfig({ background_color: value });
+            }
+          },
+          {
+            get: () => config.surface_color || defaultConfig.surface_color,
+            set: (value) => {
+              config.surface_color = value;
+              window.elementSdk.setConfig({ surface_color: value });
+            }
+          },
+          {
+            get: () => config.text_color || defaultConfig.text_color,
+            set: (value) => {
+              config.text_color = value;
+              window.elementSdk.setConfig({ text_color: value });
+            }
+          },
+          {
+            get: () => config.accent_color || defaultConfig.accent_color,
+            set: (value) => {
+              config.accent_color = value;
+              window.elementSdk.setConfig({ accent_color: value });
+            }
+          },
+          {
+            get: () => config.secondary_color || defaultConfig.secondary_color,
+            set: (value) => {
+              config.secondary_color = value;
+              window.elementSdk.setConfig({ secondary_color: value });
+            }
+          }
+        ],
+        borderables: [],
+        fontEditable: undefined,
+        fontSizeable: undefined
+      };
+    }
+    
+    function mapToEditPanelValues(config) {
+      return new Map([
+        ['game_title', config.game_title || defaultConfig.game_title]
+      ]);
+    }
+    
+    // Initialize everything
+    async function init() {
+      init3D();
+      initCharacterSelect();
+      
+      if (window.elementSdk) {
+        window.elementSdk.init({
+          defaultConfig,
+          onConfigChange,
+          mapToCapabilities,
+          mapToEditPanelValues
+        });
+      }
+      
+      if (window.dataSdk) {
+        await window.dataSdk.init(dataHandler);
+      }
+    }
+    
+    init();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9d114816979feda1',t:'MTc3MTYyNDg3Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
